@@ -3,17 +3,13 @@ package com.example.nametagchanger;
 import com.mojang.brigadier.arguments.StringArgumentType;
 import com.mojang.brigadier.context.CommandContext;
 import net.fabricmc.api.ClientModInitializer;
-import net.fabricmc.fabric.api.client.command.v2.ClientCommandManager;
 import net.fabricmc.fabric.api.client.command.v2.ClientCommandRegistrationCallback;
 import net.fabricmc.fabric.api.client.command.v2.FabricClientCommandSource;
-import net.minecraft.client.MinecraftClient;
-import net.minecraft.client.network.PlayerListEntry;
 import net.minecraft.text.Text;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.Map;
-import java.util.UUID;
 
 import static com.mojang.brigadier.arguments.StringArgumentType.getString;
 import static com.mojang.brigadier.arguments.StringArgumentType.word;
@@ -52,14 +48,7 @@ public class NametagChangerClient implements ClientModInitializer {
         String newName = getString(ctx, "newName");
         FabricClientCommandSource source = ctx.getSource();
 
-        UUID uuid = resolveUuid(source, targetName);
-        if (uuid == null) {
-            source.sendError(Text.literal("Couldn't find a player named '" + targetName
-                    + "' nearby. They need to be visible/loaded (e.g. in the tab list) first."));
-            return 0;
-        }
-
-        NametagConfig.setOverride(uuid, newName);
+        NametagConfig.setOverride(targetName, newName);
         source.sendFeedback(Text.literal("Nametag for " + targetName + " will now show as: " + newName
                 + " (client-side only, only you will see this)"));
         return 1;
@@ -69,13 +58,7 @@ public class NametagChangerClient implements ClientModInitializer {
         String targetName = getString(ctx, "player");
         FabricClientCommandSource source = ctx.getSource();
 
-        UUID uuid = resolveUuid(source, targetName);
-        if (uuid == null) {
-            source.sendError(Text.literal("Couldn't find a player named '" + targetName + "' nearby."));
-            return 0;
-        }
-
-        boolean removed = NametagConfig.removeOverride(uuid);
+        boolean removed = NametagConfig.removeOverride(targetName);
         if (removed) {
             source.sendFeedback(Text.literal("Reset nametag override for " + targetName + "."));
         } else {
@@ -92,7 +75,7 @@ public class NametagChangerClient implements ClientModInitializer {
 
     private static int executeList(CommandContext<FabricClientCommandSource> ctx) {
         FabricClientCommandSource source = ctx.getSource();
-        Map<UUID, String> overrides = NametagConfig.getAllOverrides();
+        Map<String, String> overrides = NametagConfig.getAllOverrides();
 
         if (overrides.isEmpty()) {
             source.sendFeedback(Text.literal("No custom nametags set."));
@@ -100,39 +83,9 @@ public class NametagChangerClient implements ClientModInitializer {
         }
 
         source.sendFeedback(Text.literal("Custom nametags:"));
-        MinecraftClient client = MinecraftClient.getInstance();
-        for (Map.Entry<UUID, String> entry : overrides.entrySet()) {
-            String realName = entry.getKey().toString();
-            if (client.getNetworkHandler() != null) {
-                PlayerListEntry plEntry = client.getNetworkHandler().getPlayerListEntry(entry.getKey());
-                if (plEntry != null) {
-                    realName = plEntry.getProfile().getName();
-                }
-            }
-            source.sendFeedback(Text.literal(" - " + realName + " -> " + entry.getValue()));
+        for (Map.Entry<String, String> entry : overrides.entrySet()) {
+            source.sendFeedback(Text.literal(" - " + entry.getKey() + " -> " + entry.getValue()));
         }
         return 1;
-    }
-
-    /**
-     * Resolves a UUID from a typed name by checking the current tab list
-     * (network handler's player list), which is populated for every player
-     * the client currently knows about.
-     */
-    private static UUID resolveUuid(FabricClientCommandSource source, String typedName) {
-        if (source.getClient().getNetworkHandler() == null) {
-            return null;
-        }
-        for (PlayerListEntry entry : source.getClient().getNetworkHandler().getPlayerList()) {
-            if (entry.getProfile().getName().equalsIgnoreCase(typedName)) {
-                return entry.getProfile().getId();
-            }
-        }
-        // Fall back: maybe the user directly typed a raw UUID.
-        try {
-            return UUID.fromString(typedName);
-        } catch (IllegalArgumentException e) {
-            return null;
-        }
     }
 }
