@@ -14,14 +14,16 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Collections;
 import java.util.LinkedHashMap;
+import java.util.Locale;
 import java.util.Map;
-import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
- * Purely client-side storage of "UUID -> custom display name" overrides.
- * This never touches any server data; it only changes what is rendered
- * locally above other players' heads in the world.
+ * Purely client-side storage of "username -> custom display name" overrides.
+ * Keyed by username (lowercased for lookups) since that's what's actually
+ * available on the per-frame PlayerEntityRenderState we hook into - it does
+ * not carry the player's UUID. This never touches any server data; it only
+ * changes what is rendered locally above other players' heads.
  */
 public final class NametagConfig {
 
@@ -32,10 +34,14 @@ public final class NametagConfig {
             .getConfigDir()
             .resolve("nametagchanger.json");
 
-    // uuid (as string) -> custom name
-    private static final Map<UUID, String> OVERRIDES = new ConcurrentHashMap<>();
+    // lowercased username -> custom name
+    private static final Map<String, String> OVERRIDES = new ConcurrentHashMap<>();
 
     private NametagConfig() {
+    }
+
+    private static String key(String username) {
+        return username.toLowerCase(Locale.ROOT);
     }
 
     public static void load() {
@@ -47,11 +53,7 @@ public final class NametagConfig {
             Map<String, String> raw = GSON.fromJson(reader, MAP_TYPE);
             if (raw != null) {
                 for (Map.Entry<String, String> entry : raw.entrySet()) {
-                    try {
-                        OVERRIDES.put(UUID.fromString(entry.getKey()), entry.getValue());
-                    } catch (IllegalArgumentException ignored) {
-                        // skip malformed UUID entries
-                    }
+                    OVERRIDES.put(key(entry.getKey()), entry.getValue());
                 }
             }
         } catch (IOException e) {
@@ -67,30 +69,28 @@ public final class NametagConfig {
             return;
         }
 
-        Map<String, String> raw = new LinkedHashMap<>();
-        for (Map.Entry<UUID, String> entry : OVERRIDES.entrySet()) {
-            raw.put(entry.getKey().toString(), entry.getValue());
-        }
-
         try (Writer writer = Files.newBufferedWriter(CONFIG_PATH, StandardCharsets.UTF_8)) {
-            GSON.toJson(raw, MAP_TYPE, writer);
+            GSON.toJson(OVERRIDES, MAP_TYPE, writer);
         } catch (IOException e) {
             NametagChangerClient.LOGGER.error("Failed to save nametagchanger.json", e);
         }
     }
 
-    /** Returns the custom name for this player's UUID, or null if none is set. */
-    public static String getOverride(UUID uuid) {
-        return OVERRIDES.get(uuid);
+    /** Returns the custom name for this username, or null if none is set. */
+    public static String getOverride(String username) {
+        if (username == null) {
+            return null;
+        }
+        return OVERRIDES.get(key(username));
     }
 
-    public static void setOverride(UUID uuid, String customName) {
-        OVERRIDES.put(uuid, customName);
+    public static void setOverride(String username, String customName) {
+        OVERRIDES.put(key(username), customName);
         save();
     }
 
-    public static boolean removeOverride(UUID uuid) {
-        boolean removed = OVERRIDES.remove(uuid) != null;
+    public static boolean removeOverride(String username) {
+        boolean removed = OVERRIDES.remove(key(username)) != null;
         if (removed) {
             save();
         }
@@ -102,7 +102,7 @@ public final class NametagConfig {
         save();
     }
 
-    public static Map<UUID, String> getAllOverrides() {
+    public static Map<String, String> getAllOverrides() {
         return Collections.unmodifiableMap(OVERRIDES);
     }
 }
