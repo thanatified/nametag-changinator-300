@@ -1,0 +1,27 @@
+{
+	"schemaVersion": 1,
+	"id": "nametagchanger",
+	"version": "${version}",
+	"name": "Nametag Changer",
+	"description": "Client-side only: lets you override the nametag shown above other players' heads. Purely cosmetic and local to you.",
+	"authors": [
+		"You"
+	],
+	"contact": {},
+	"license": "CC0-1.0",
+	"environment": "client",
+	"entrypoints": {
+		"client": [
+			"com.example.nametagchanger.NametagChangerClient"
+		]
+	},
+	"mixins": [
+		"nametagchanger.mixins.json"
+	],
+	"depends": {
+		"fabricloader": ">=0.16.9",
+		"minecraft": "~1.21.4",
+		"java": ">=21",
+		"fabric-api": "*"
+	}
+}
